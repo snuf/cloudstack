@@ -27,7 +27,7 @@ import org.junit.Test;
 import com.cloud.agent.api.Answer;
 import com.cloud.agent.api.CheckNetworkCommand;
 import com.cloud.agent.api.PingTestCommand;
-import com.cloud.hypervisor.ovm3.objects.CloudStackPluginTest;
+import com.cloud.hypervisor.ovm3.objects.CloudstackPluginTest;
 import com.cloud.hypervisor.ovm3.objects.ConnectionTest;
 import com.cloud.hypervisor.ovm3.objects.NetworkTest;
 import com.cloud.hypervisor.ovm3.objects.XenTest;
@@ -43,7 +43,7 @@ public class Ovm3HypervisorNetworkTest {
     Ovm3SupportTest support = new Ovm3SupportTest();
     Ovm3HypervisorResource hypervisor = new Ovm3HypervisorResource();
     Ovm3HypervisorResourceTest hyperTest = new Ovm3HypervisorResourceTest();
-    CloudStackPluginTest csp = new CloudStackPluginTest();
+    CloudstackPluginTest csp = new CloudstackPluginTest();
     XenTest xen = new XenTest();
     NetworkTest network = new NetworkTest();
     XmlTestResultTest results = new XmlTestResultTest();

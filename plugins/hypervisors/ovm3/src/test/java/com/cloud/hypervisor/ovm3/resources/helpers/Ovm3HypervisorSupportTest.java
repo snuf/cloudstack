@@ -36,6 +36,7 @@ import com.cloud.hypervisor.ovm3.objects.LinuxTest;
 import com.cloud.hypervisor.ovm3.objects.NetworkTest;
 import com.cloud.hypervisor.ovm3.objects.Ovm3ResourceException;
 import com.cloud.hypervisor.ovm3.objects.XmlTestResultTest;
+import com.cloud.hypervisor.ovm3.objects.CloudstackPluginTest;
 import com.cloud.hypervisor.ovm3.objects.XenTest;
 import com.cloud.hypervisor.ovm3.resources.Ovm3HypervisorResource;
 import com.cloud.hypervisor.ovm3.resources.Ovm3StorageProcessor;
@@ -240,7 +241,6 @@ public class Ovm3HypervisorSupportTest {
         Answer ra = hypervisor.executeRequest(cmd);
         results.basicBooleanTest(ra.getResult());
     }
-    /* We can't fence yet... */
     @Test
     public void FenceCommandTest() throws ConfigurationException {
         con = prepare();
@@ -256,6 +256,7 @@ public class Ovm3HypervisorSupportTest {
         con.setIp(config.getAgentIp());
         Ovm3HypervisorSupport hypervisor = new Ovm3HypervisorSupport(con,
                 config);
+        CloudstackPluginTest csp = new CloudstackPluginTest();
         LinuxTest linuxTest = new LinuxTest();
         NetworkTest networkTest = new NetworkTest();
         StartupRoutingCommand srCmd = new StartupRoutingCommand();
@@ -263,6 +264,7 @@ public class Ovm3HypervisorSupportTest {
                 .getDiscoverHw()));
         con.addResult(results.simpleResponseWrapWrapper(linuxTest
                 .getDiscoverserver()));
+        con.addResult(csp.getDom0BridgeTypeXml());
         con.addResult(results.simpleResponseWrapWrapper(networkTest
                 .getDiscoverNetwork()));
         hypervisor.fillHostInfo(srCmd);

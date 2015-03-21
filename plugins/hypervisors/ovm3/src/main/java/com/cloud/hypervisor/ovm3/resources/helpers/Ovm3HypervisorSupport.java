@@ -51,7 +51,7 @@ import com.cloud.hypervisor.ovm3.objects.CloudstackPlugin;
 import com.cloud.hypervisor.ovm3.objects.Common;
 import com.cloud.hypervisor.ovm3.objects.Connection;
 import com.cloud.hypervisor.ovm3.objects.Linux;
-import com.cloud.hypervisor.ovm3.objects.Network;
+// import com.cloud.hypervisor.ovm3.objects.Network;
 import com.cloud.hypervisor.ovm3.objects.Ovm3ResourceException;
 import com.cloud.hypervisor.ovm3.objects.Pool;
 import com.cloud.hypervisor.ovm3.objects.Xen;
@@ -219,8 +219,8 @@ public class Ovm3HypervisorSupport {
             cmd.setCaps(host.getCapabilities());
             cmd.setPrivateIpAddress(c.getIp());
             cmd.setStorageIpAddress(c.getIp());
-            Network net = new Network(c);
-            String defaultBridge = net.getBridgeByIp(c.getIp()).getName();
+            Ovm3Network net = new Ovm3Network(c, config);
+            String defaultBridge = net.getBridgeNameByIp(c.getIp());
             if (defaultBridge == null) {
                 throw new CloudRuntimeException(
                         "Unable to obtain valid bridge with " + c.getIp());

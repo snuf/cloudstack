@@ -239,7 +239,7 @@ public class OvmObject {
                     input)));
         } catch (SAXException | IOException e) {
             LOGGER.info(e.getClass() + ": ", e);
-            throw new Ovm3ResourceException("Unable to parse XML: ", e);
+            throw new Ovm3ResourceException("Unable to parse XML: " + e.getClass(), e);
         }
         return xmlDocument;
     }

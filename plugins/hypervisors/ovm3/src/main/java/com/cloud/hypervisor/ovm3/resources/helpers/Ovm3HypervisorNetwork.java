@@ -30,7 +30,6 @@ import com.cloud.agent.api.PingTestCommand;
 import com.cloud.agent.api.to.NicTO;
 import com.cloud.hypervisor.ovm3.objects.CloudstackPlugin;
 import com.cloud.hypervisor.ovm3.objects.Connection;
-import com.cloud.hypervisor.ovm3.objects.Network;
 import com.cloud.hypervisor.ovm3.objects.Ovm3ResourceException;
 import com.cloud.network.PhysicalNetworkSetupInfo;
 import com.cloud.network.Networks.BroadcastDomainType;
@@ -49,17 +48,14 @@ public class Ovm3HypervisorNetwork {
     }
 
     public void configureNetworking() throws ConfigurationException {
-        /* TODO: setup meta tags for the management interface (probably
-        * required with multiple interfaces)?
-        */
         try {
-           Network net = new Network(c);
+           Ovm3Network net = new Ovm3Network(c, config);
            String controlIface = config.getAgentControlNetworkName();
            if (controlIface != null
                    && net.getInterfaceByName(controlIface) == null) {
                LOGGER.debug("starting " + controlIface);
                net.startOvsLocalConfig(controlIface);
-               /* ovs replies too "fast" so the bridge can be "busy" */
+               /* ovm replies too "fast" so the bridge can be "busy" */
                int contCount = 0;
                while (net.getInterfaceByName(controlIface) == null) {
                    LOGGER.debug("waiting for " + controlIface);
@@ -74,16 +70,10 @@ public class Ovm3HypervisorNetwork {
            } else {
                LOGGER.debug("already have " + controlIface);
            }
-           /*
-            * The bridge is remembered upon reboot, but not the IP or the
-            * config. Zeroconf also adds the route again by default.
-            */
+           /* configure the interface */
            net.ovsIpConfig(controlIface, "static",
                    NetUtils.getLinkLocalGateway(),
                    NetUtils.getLinkLocalNetMask());
-           CloudstackPlugin cSp = new CloudstackPlugin(c);
-           cSp.ovsControlInterface(controlIface,
-                   NetUtils.getLinkLocalCIDR());
         } catch (InterruptedException e) {
             LOGGER.error("interrupted?", e);
         } catch (Ovm3ResourceException e) {
@@ -99,8 +89,7 @@ public class Ovm3HypervisorNetwork {
             LOGGER.debug("Looking for network setup by name " + nameTag);
 
             try {
-                Network net = new Network(c);
-                net.getInterfaceList();
+                Ovm3Network net = new Ovm3Network(c, config);
                 if (net.getBridgeByName(nameTag) != null) {
                     LOGGER.debug("Found bridge with name: " + nameTag);
                     return true;
@@ -193,13 +182,12 @@ public class Ovm3HypervisorNetwork {
             LOGGER.error(msg);
             throw new CloudRuntimeException(msg);
         }
-        Network net = new Network(c);
+        Ovm3Network net = new Ovm3Network(c, config);
         /* figure out if our bridged vlan exists, if not then create */
         String brName = networkName + "." + vlanId.toString();
         try {
-            String physInterface = net.getPhysicalByBridgeName(networkName);
-            if (net.getInterfaceByName(brName) == null) {
-                net.startOvsVlanBridge(brName, physInterface, vlanId);
+            if (net.getBridgeByName(brName) == null) {
+                net.startOvsVlanBridge(brName, networkName, vlanId);
             } else {
                 LOGGER.debug("Interface " + brName + " already exists");
             }
@@ -215,12 +203,15 @@ public class Ovm3HypervisorNetwork {
     public String getNetwork(NicTO nic) throws Ovm3ResourceException {
         String vlanId = null;
         String bridgeName = null;
-        if (nic.getBroadcastType() == BroadcastDomainType.Vlan) {
+        BroadcastDomainType bcastType = nic.getBroadcastType();
+        TrafficType tType = nic.getType();
+        if (bcastType == BroadcastDomainType.Vlan) {
             vlanId = BroadcastDomainType.getValue(nic.getBroadcastUri());
         }
 
-        if (nic.getType() == TrafficType.Guest) {
-            if (nic.getBroadcastType() == BroadcastDomainType.Vlan
+        /* only isolation for guests in our case, which might not be "fair" */
+        if (tType == TrafficType.Guest) {
+            if (bcastType == BroadcastDomainType.Vlan
                     && !"untagged".equalsIgnoreCase(vlanId)) {
                 /* This is completely the wrong place for this, we should NEVER
                  * create a network when we're just trying to figure out if it's there
@@ -228,22 +219,26 @@ public class Ovm3HypervisorNetwork {
                  */
                 bridgeName = createVlanBridge(config.getAgentGuestNetworkName(),
                         Integer.valueOf(vlanId));
+            } else if (bcastType == BroadcastDomainType.Lswitch) {
+                bridgeName = config.getAgentGuestNetworkName();
             } else {
+                // ovs-vsctl add-port virbr0 gre0 -- set interface gre0 type=gre options:remote_ip=192.168.1.67
                 bridgeName = config.getAgentGuestNetworkName();
             }
 
-            /* VLANs for other mgmt traffic ? */
-        } else if (nic.getType() == TrafficType.Control) {
+        /* We assume preconfigured interfaces for all other traffic? */
+        } else if (tType == TrafficType.Control) {
             bridgeName = config.getAgentControlNetworkName();
-        } else if (nic.getType() == TrafficType.Public) {
+        /* perhaps this should join Guest for configurability's sake */
+        } else if (tType == TrafficType.Public) {
             bridgeName = config.getAgentPublicNetworkName();
-        } else if (nic.getType() == TrafficType.Management) {
+        } else if (tType == TrafficType.Management) {
             bridgeName = config.getAgentPrivateNetworkName();
-        } else if (nic.getType() == TrafficType.Storage) {
+        } else if (tType == TrafficType.Storage) {
             bridgeName = config.getAgentStorageNetworkName();
         } else {
             throw new CloudRuntimeException("Unknown network traffic type:"
-                    + nic.getType());
+                    + tType);
         }
         return bridgeName;
     }
