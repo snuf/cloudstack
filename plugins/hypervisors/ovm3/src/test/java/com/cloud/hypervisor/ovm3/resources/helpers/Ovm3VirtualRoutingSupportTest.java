@@ -24,7 +24,7 @@ import org.junit.Test;
 import com.cloud.agent.api.Answer;
 import com.cloud.agent.api.NetworkUsageCommand;
 import com.cloud.agent.api.check.CheckSshCommand;
-import com.cloud.hypervisor.ovm3.objects.CloudStackPluginTest;
+import com.cloud.hypervisor.ovm3.objects.CloudstackPluginTest;
 import com.cloud.hypervisor.ovm3.objects.ConnectionTest;
 import com.cloud.hypervisor.ovm3.objects.XmlTestResultTest;
 import com.cloud.hypervisor.ovm3.resources.Ovm3HypervisorResource;
@@ -35,7 +35,7 @@ public class Ovm3VirtualRoutingSupportTest {
     Ovm3ConfigurationTest configTest = new Ovm3ConfigurationTest();
     Ovm3SupportTest support = new Ovm3SupportTest();
     Ovm3HypervisorResource hypervisor = new Ovm3HypervisorResource();
-    CloudStackPluginTest csp = new CloudStackPluginTest();
+    CloudstackPluginTest csp = new CloudstackPluginTest();
     XmlTestResultTest results = new XmlTestResultTest();
 
     @Test

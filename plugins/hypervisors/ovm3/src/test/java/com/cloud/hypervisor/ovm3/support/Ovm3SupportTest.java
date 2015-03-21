@@ -21,7 +21,7 @@ import java.util.Map;
 
 import javax.naming.ConfigurationException;
 
-import com.cloud.hypervisor.ovm3.objects.CloudStackPluginTest;
+import com.cloud.hypervisor.ovm3.objects.CloudstackPluginTest;
 import com.cloud.hypervisor.ovm3.objects.ConnectionTest;
 import com.cloud.hypervisor.ovm3.objects.LinuxTest;
 import com.cloud.hypervisor.ovm3.objects.NetworkTest;
@@ -38,7 +38,7 @@ public class Ovm3SupportTest {
     NetworkTest net = new NetworkTest();
     LinuxTest linux = new LinuxTest();
     XenTest xen = new XenTest();
-    CloudStackPluginTest csp = new CloudStackPluginTest();
+    CloudstackPluginTest csp = new CloudstackPluginTest();
     Ovm3HypervisorResource hypervisor = new Ovm3HypervisorResource();
     Ovm3VirtualRoutingResource virtualrouting = new Ovm3VirtualRoutingResource();
     Ovm3ConfigurationTest configTest = new Ovm3ConfigurationTest();
@@ -107,6 +107,10 @@ public class Ovm3SupportTest {
         con.setMethodResponse("check_dom0_storage_health", results.simpleResponseWrap("boolean", "1"));
         con.setMethodResponse("check_dom0_port", results.simpleResponseWrap("boolean", "1"));
         con.setMethodResponse("check_dom0_storage_health_check",  (csp.getDom0StorageCheckXml()));
+        con.setMethodResponse("get_bridge_type",  csp.getDom0BridgeTypeXml());
+        // con.setMethodResponse("get_vswitch_interface_by_name",  csp.getSwitchControlBridgeXml());
+        con.setMethodResponse("get_vswitch_interface_by_name",  csp.getSwitchBridgeXml());
+        con.setMethodResponse("get_vswitch_interface_by_ip",  csp.getSwitchBridgeXml());
         return con;
     }
 }

@@ -30,7 +30,7 @@ import com.cloud.agent.api.PlugNicCommand;
 import com.cloud.agent.api.PrepareForMigrationCommand;
 import com.cloud.agent.api.UnPlugNicCommand;
 import com.cloud.agent.api.to.NicTO;
-import com.cloud.hypervisor.ovm3.objects.CloudStackPluginTest;
+import com.cloud.hypervisor.ovm3.objects.CloudstackPluginTest;
 import com.cloud.hypervisor.ovm3.objects.ConnectionTest;
 import com.cloud.hypervisor.ovm3.objects.Ovm3ResourceException;
 import com.cloud.hypervisor.ovm3.objects.XenTest;
@@ -47,7 +47,7 @@ public class Ovm3VmSupportTest {
     Ovm3SupportTest support = new Ovm3SupportTest();
     Ovm3HypervisorResource hypervisor = new Ovm3HypervisorResource();
     Ovm3HypervisorResourceTest hyperTest = new Ovm3HypervisorResourceTest();
-    CloudStackPluginTest csp = new CloudStackPluginTest();
+    CloudstackPluginTest csp = new CloudstackPluginTest();
     XenTest xen = new XenTest();
     XmlTestResultTest results = new XmlTestResultTest();
 

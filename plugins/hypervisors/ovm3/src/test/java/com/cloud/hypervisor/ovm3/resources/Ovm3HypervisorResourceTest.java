@@ -41,7 +41,7 @@ import com.cloud.agent.api.to.NfsTO;
 import com.cloud.agent.api.to.NicTO;
 import com.cloud.agent.api.to.VirtualMachineTO;
 import com.cloud.host.Host;
-import com.cloud.hypervisor.ovm3.objects.CloudStackPluginTest;
+import com.cloud.hypervisor.ovm3.objects.CloudstackPluginTest;
 import com.cloud.hypervisor.ovm3.objects.ConnectionTest;
 import com.cloud.hypervisor.ovm3.objects.NetworkTest;
 import com.cloud.hypervisor.ovm3.objects.Ovm3ResourceException;
@@ -67,7 +67,7 @@ public class Ovm3HypervisorResourceTest {
     Ovm3SupportTest support = new Ovm3SupportTest();
     NetworkTest net = new NetworkTest();
     // LinuxTest linux = new LinuxTest();
-    CloudStackPluginTest csp = new CloudStackPluginTest();
+    CloudstackPluginTest csp = new CloudstackPluginTest();
     XenTest xen = new XenTest();
     String currentStatus = "put";
     String vmName = "i-2-3-VM";

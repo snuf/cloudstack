@@ -72,6 +72,8 @@ public class Ovm3Configuration {
     private String domRCloudPath = "/opt/cloud/bin/";
     private String virtualdiskdir = "VirtualDisks";
     private String templatedir = "Templates";
+    private String dom0BridgeType;
+    // = "linuxbridge";
     private Map<String, Network.Interface> agentInterfaces = null;
     private Boolean istest = false;
     private Map<String, Object> rawParams = new HashMap<String, Object>();
@@ -461,5 +463,11 @@ public class Ovm3Configuration {
     }
     public void setRawParams(Map<String, Object> params) {
         rawParams.putAll(params);
+    }
+    public void setDom0BridgeType(String type) {
+        this.dom0BridgeType = type;
+    }
+    public String getDom0BridgeType() {
+        return this.dom0BridgeType;
     }
 }

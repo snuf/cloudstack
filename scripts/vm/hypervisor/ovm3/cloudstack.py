@@ -17,6 +17,7 @@
 # specific language governing permissions and limitations
 # under the License.
 #
+# REMINDER: Needs to work on 2.4 for 3.2.x
 # TODO: Needs cleaning and sanitazation.
 #
 import logging
@@ -29,48 +30,53 @@ import socket
 import tempfile
 import logging
 import logging.handlers
+import string
 
 from xen.util.xmlrpcclient import ServerProxy
 from xmlrpclib import Error
 from xen.xend import XendClient
 from agent.api.base import Agent
 from agent.lib.settings import get_api_version
+from agent.lib.config import get_config
 from xen.xend import sxp
 
 class CloudStack(Agent):
     """
-    Cloudstack plugin for OVM3.2.x.
+    Cloudstack plugin for OVM3.2.x./OVM3.3.x
     """
 
     # exposed services
     def get_services(self, version=None):
         return {
             'call': call,
-            'get_vncport': getVncPort,
-            'exec_domr': domrExec,
-            'check_domr_port': domrCheckPort,
-            'check_dom0_port': dom0CheckPort,
-            'check_domr_ssh': domrCheckSsh,
-            'check_dom0_ip': dom0CheckIp,
-            # rename to dom0StorageStatusCheck
-            'check_dom0_storage_health_check': dom0CheckStorageHealthCheck,
-            # dom0StorageStatus
-            'check_dom0_storage_health': dom0CheckStorageHealth,
-            'ovs_domr_upload_file': ovsDomrUploadFile,
-            'ovs_control_interface': ovsControlInterface,
-            'ovs_mkdirs': ovsMkdirs,
-            'ovs_check_file': ovsCheckFile,
-            'ovs_upload_ssh_key': ovsUploadSshKey,
-            'ovs_upload_file': ovsUploadFile,
-            'ovs_dom0_stats': ovsDom0Stats,
-            'ovs_domU_stats': ovsDomUStats,
-            'get_module_version': getModuleVersion,
-            'get_ovs_version': ovmVersion,
+            'get_vncport': get_vnc_port,
+            'exec_domr': exec_domr,
+            'check_domr_port': check_domr_port,
+            'check_dom0_port': check_dom0_port,
+            'check_domr_ssh': check_domr_ssh,
+            'check_dom0_ip': check_dom0_ip,
+            'check_dom0_storage_health_check': check_dom0_storage_health_check,
+            'check_dom0_storage_health': check_dom0_storage_health,
+            'ovs_domr_upload_file': ovs_domr_upload_file,
+            'ovs_control_interface': ovs_control_interface,
+            'ovs_mkdirs': ovs_mkdirs,
+            'ovs_check_file': ovs_check_file,
+            'ovs_upload_ssh_key': ovs_upload_ssh_key,
+            'ovs_upload_file': ovs_upload_file,
+            'ovs_dom0_stats': ovs_dom0_stats,
+            'ovs_domU_stats': ovs_domU_stats,
+            'get_module_version': get_module_version,
+            'get_ovs_version': get_ovs_version,
             'ping': ping,
-#            'patch': ovmCsPatch,
-#            'ovs_agent_set_ssl': ovsAgentSetSsl,
-#            'ovs_agent_set_port': ovsAgentSetPort,
-#            'ovs_restart_agent': ovsRestartAgent,
+            'get_bridge_type': get_bridge_type,
+            'get_vswitch_interface_by_ip': get_vswitch_interface_by_ip,
+            'get_vswitch_interface_by_name': get_vswitch_interface_by_name,
+            'set_iface_ip': set_iface_ip,
+            'check_iface_ip': check_iface_ip,
+            'add_vswitch_vlan_bridge': add_vswitch_vlan_bridge,
+            'del_vswitch_vlan_bridge': del_vswitch_vlan_bridge,
+
+#            'ovs_hard_partition': ovsSetCpuPinning
         }
 
     def getName(self):
@@ -90,13 +96,112 @@ def Logger(level=logging.DEBUG):
     return logger
 
 # which version are we intended for?
-def getModuleVersion():
-    return "0.1"
+def get_module_version():
+    return "0.3"
 
 # call test
 def call(msg):
     return msg
 
+def call_prog(prog, args):
+    cmd = [prog ] + args
+    try:
+        out = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        return out
+    except Exception, e:
+        print e
+
+#####
+# Openvswitch related
+#####
+def ovs_vsctl(args):
+    return call_prog("ovs-vsctl", [ "-vconsole:off" ] + args)
+
+def get_vswitch_bits(cmd):
+    l=[]
+    out = ovs_vsctl(cmd).stdout
+    for line in out:
+        l.append(line.rstrip('\n'))
+    return l
+
+def check_iface_ip(iface, ip):
+    out = call_prog('ip', [ 'addr', 'show', iface ])
+    for line in out.stdout:
+        if re.search(ip, line):
+            return True
+    return False
+
+def set_iface_ip(iface, ip, mask):
+    if check_iface_ip(iface, ip):
+        return True
+    try:
+        out = call_prog('ip', ['addr', 'add', "%s/%s" % (ip, mask), 'dev', iface])
+        if check_iface_ip(iface, ip):
+            return True
+    except Exception, e:
+        print e
+    return False
+
+def get_interface_bridge(name):
+    bridge=get_vswitch_bits(['iface-to-br', name])
+    if not bridge:
+        return name
+    else:
+        return bridge[0]
+
+def add_vswitch_vlan_bridge(name, bridge, vlan):
+    if 'mac' in  get_vswitch_interface_by_name(name):
+        return get_vswitch_interface_by_name(name)
+    ovs_vsctl(["add-br", name, bridge, vlan])
+    return get_vswitch_interface_by_name(name)
+
+def del_vswitch_vlan_bridge(name):
+    if get_vswitch_interface_by_name(name):
+        ovs_vsctl(["del-br", name]).returncode
+    return get_vswitch_interface_by_name(name)
+
+def get_vswitch_interface_by_ip(ip):
+    iface={}
+    pline=""
+    out = call_prog('ip', ['addr', 'show'])
+    for line in out.stdout:
+        if re.search(ip, line):
+            el = string.split(line)
+            mac = string.split(pline)
+            iface['name']=el[-1]
+            iface['mac']=mac[1]
+            iface['ip']=ip
+            iface['bridge']=get_interface_bridge(iface['name'])
+            return iface
+        else:
+            pline=line
+
+def get_vswitch_interface_by_name(name):
+    iface={}
+    iface['name'] = name
+    out = call_prog('ip', ['addr', 'show', name])
+    for line in out.stdout:
+        if re.search("^\s+link/ether", line):
+            iface['mac']=string.split(line)[1]
+        if re.search("^\s+inet", line):
+            ip=string.split(line)[1]
+            ip,mask=string.split(ip,"/")
+            iface['ip']=ip
+            iface['mask']=mask
+    iface['bridge']=get_interface_bridge(name)
+    return iface
+
+def get_bridge_type():
+    config = get_config()
+    try:
+        virtualnetwork = config.get('network', 'virtualnetwork').lower()
+    except Exception:
+        virtualnetwork = 'linuxbridge'
+    return virtualnetwork
+
+#####
+# Dom0/DomR and statistics related
+#####
 def paramikoOpts(con, keyfile=domrKeyFile):
     con.load_system_host_keys()
     con.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -105,7 +210,7 @@ def paramikoOpts(con, keyfile=domrKeyFile):
     return key
 
 # execute something on domr
-def domrExec(host, cmd, timeout=10, username=domrRoot, port=domrPort, keyfile=domrKeyFile):
+def exec_domr(host, cmd, timeout=10, username=domrRoot, port=domrPort, keyfile=domrKeyFile):
     ssh = paramiko.SSHClient()
     pkey = paramikoOpts(ssh, keyfile)
     ssh.connect(host, port, username, pkey=pkey, timeout=timeout)
@@ -154,11 +259,11 @@ def domrScp(host, localfile, remotefile, timeout=10, username=domrRoot, port=dom
     return False
 
 # check a port on dom0
-def dom0CheckPort(ip, port=domrPort, timeout=3):
-    return domrCheckPort(ip, port, timeout=timeout)
+def check_dom0_port(ip, port=domrPort, timeout=3):
+    return check_domr_port(ip, port, timeout=timeout)
 
 # check a port on domr
-def domrCheckPort(ip, port=domrPort, timeout=3):
+def check_domr_port(ip, port=domrPort, timeout=3):
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(timeout)
@@ -169,8 +274,8 @@ def domrCheckPort(ip, port=domrPort, timeout=3):
     return True
 
 # check ssh
-def domrCheckSsh(ip, port=domrPort, timeout=10):
-    x = domrExec(ip, "", port=port, timeout=timeout)
+def check_domr_ssh(ip, port=domrPort, timeout=10):
+    x = self.exec_domr(ip, "", port=port, timeout=timeout)
     if (x.get("rc") == 0):
         return True
     return False
@@ -182,7 +287,7 @@ def grep(file, string):
            c = c + 1
     return c
 
-def ovmVersion():
+def get_ovs_version():
     path = "/etc/ovs-release"
     return re.findall("[\d\.]+$", open(path).readline())[0]
 
@@ -197,7 +302,7 @@ def ovmCsPatch(version="3.2.1"):
     xendRtime = "MINIMUM_RESTART_TIME"
     netconf = "/etc/sysconfig/network"
     netzero = "NOZEROCONF"
-    version = ovmVersion()
+    version = get_ovs_version()
 
     # this bug is present from 3.2.1 till 3.3.2
     if grep(netcom, "_%s" % func) == 3 and grep(netbr, "_%s" % func) < 1:
@@ -270,7 +375,7 @@ def restartService(service):
     return True
 
 # sets the control interface and removes the route net entry
-def ovsControlInterface(dev, cidr):
+def ovs_control_interface(dev, cidr):
     controlRoute = False
     command = ['ip route show'];
     p = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE)
@@ -298,7 +403,7 @@ def ovsControlInterface(dev, cidr):
     subprocess.call(command, shell=False)
     return True
 
-def dom0CheckIp(ip):
+def check_dom0_ip(ip):
     command = ['ip addr show']
     p = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE)
     while True:
@@ -310,7 +415,7 @@ def dom0CheckIp(ip):
             break
     return False
 
-def dom0CheckStorageHealthCheck(path, script, guid, timeout, interval):
+def check_dom0_storage_health_check(path, script, guid, timeout, interval):
     storagehealth="storagehealth.py"
     path="/opt/cloudstack/bin"
     running = False
@@ -334,7 +439,7 @@ def dom0CheckStorageHealthCheck(path, script, guid, timeout, interval):
 
     return [running, started]
 
-def dom0CheckStorageHealth(path, script, guid, timeout):
+def check_dom0_storage_health(path, script, guid, timeout):
     response = None
     delay = timeout
     log = Logger()
@@ -347,32 +452,23 @@ def dom0CheckStorageHealth(path, script, guid, timeout):
     else:
         log.warning("primary storage NOT is accessible for %s" % (guid))
         return False
-    # while True:
-    #    line = p.stdout.readline()
-    #   if line != '':
-    #        if re.search("False", line):
-    #            log.debug("primary storage NOT is accessible for %s, %s" % (guid, line))
-    #            return False
-    #    else:
-    #        break
-    # return True
 
 # create a dir if we need it
-def ovsMkdirs(dir, mode=0700):
+def ovs_mkdirs(dir, mode=0700):
     if not os.path.exists(dir):
         return os.makedirs(dir, mode)
     return True
 
 # if a file exists, easy
-def ovsCheckFile(file):
+def ovs_check_file(file):
     if os.path.isfile(file):
         return True
     return False
 
-def ovsUploadFile(path, filename, content):
+def ovs_upload_file(path, filename, content):
     file = "%s/%s" % (path, filename)
     try:
-        ovsMkdirs(os.path.expanduser(path))
+        ovs_mkdirs(os.path.expanduser(path))
     except Error, v:
         print "path was already there %s" % path
 
@@ -385,7 +481,7 @@ def ovsUploadFile(path, filename, content):
         return False
     return True
 
-def ovsDomrUploadFile(domr, path, file, content):
+def ovs_domr_upload_file(domr, path, file, content):
     remotefile = "%s/%s" % (path, file)
     try:
         temp = tempfile.NamedTemporaryFile()
@@ -400,21 +496,26 @@ def ovsDomrUploadFile(domr, path, file, content):
     return True
 
 # upload keys
-def ovsUploadSshKey(keyfile, content):
+def ovs_upload_ssh_key(keyfile, content):
     keydir = os.path.expanduser("~/.ssh")
-    return ovsUploadFile(keydir, keyfile, content)
+    return ovs_upload_file(keydir, keyfile, content)
 
 # older python,
-def ovsDom0Stats(bridge):
+def ovs_dom0_stats(bridge):
     stats = {}
     stats['cpu'] = "%s" % (100 - float(os.popen("top -b -n 1 | grep Cpu\(s\): | cut -d% -f4|cut -d, -f2").read()))
     stats['free'] = "%s" % (1048576 * int(os.popen("xm info | grep free_memory | awk '{ print $3 }'").read()))
     stats['total'] = "%s" % (1048576 * int(os.popen("xm info | grep total_memory | awk '{ print $3 }'").read()))
-    stats['tx'] = os.popen("netstat -in | grep %s | head -1 | awk '{print $4 }'" % bridge).read()
-    stats['rx'] = os.popen("netstat -in | grep %s | head -1 | awk '{print $8 }'" % bridge).read()
+    if get_bridge_type() == "linuxbridge":
+        stats['tx'] = os.popen("netstat -in | grep %s | head -1 | awk '{print $4 }'" % bridge).read()
+        stats['rx'] = os.popen("netstat -in | grep %s | head -1 | awk '{print $8 }'" % bridge).read()
+    #  ovs-ofctl dump-ports virbr0 (local or interface)
+    elif get_bridge_type() == "openvswitch":
+        stats['tx'] = "0"
+        stats['rx'] = "0"
     return stats
 
-def getVncPort(domain):
+def get_vnc_port(domain):
     port = "0"
     if re.search("\w-(\d+-)?\d+-VM", domain):
         server = ServerProxy(XendClient.uri)
@@ -437,7 +538,7 @@ def get_child_by_name(exp, childname, default=None):
     except:
         return default
 
-def ovsDomUStats(domain):
+def ovs_domU_stats(domain):
     _rd_bytes = 0
     _wr_bytes = 0
     _rd_ops = 0
@@ -485,17 +586,15 @@ def ping(host, count=3):
         return True
     return False
 
-# add SystemVM stuff here....
-#
-
-#
+#####
 # Self deploy and integration, not de-integration
 # should return False if fails
 #
 # install us if we are missing in:
-# /usr/lib64/python2.4/site-packages/agent/api
+# /usr/lib64/python2.x/site-packages/agent/api
 # and add our hooks in:
-# /usr/lib64/python2.4/site-packages/agent/target/api.py
+# /usr/lib64/python2.x/site-packages/agent/target/api.py
+#####
 if __name__ == '__main__':
     from distutils.sysconfig import get_python_lib
     from agent.target.api import MODULES
