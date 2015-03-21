@@ -29,7 +29,14 @@ import org.w3c.dom.Document;
 public class Network extends OvmObject {
     private static final Logger LOGGER = Logger.getLogger(Network.class);
     private static final String START = "start";
+    private static final String STOP = "stop";
     private static final String BRIDGE = "Bridge";
+    private static final String NAME = "Name";
+    private static final String MAC = "MAC";
+    private static final String MASK = "Netmask";
+    private static final String BROADCAST = "Broadcast";
+    private static final String VLAN = "Vlan";
+    private static final String TYPE = "Type";
     private static final String ADDRESS = "Address";
     private static final String PHYSICAL = "Physical";
     private Map<String, Interface> interfaceList = null;
@@ -49,13 +56,14 @@ public class Network extends OvmObject {
     public static class Interface {
         private final Map<String, String> iFace = new HashMap<String, String>() {
             {
-                put("Type", null);
+                put(TYPE, null);
                 put(PHYSICAL, null);
-                put("Name", null);
+                put(NAME, null);
                 put(ADDRESS, null);
-                put("Broadcast", null);
-                put("MAC", null);
-                put("Vlan", null);
+                put(BROADCAST, null);
+                put(MAC, null);
+                put(VLAN, null);
+                put(MASK, null);
             }
         };
 
@@ -63,11 +71,11 @@ public class Network extends OvmObject {
         }
 
         public void setIfType(String t) {
-            iFace.put("Type", t);
+            iFace.put(TYPE, t);
         }
 
         public String getIfType() {
-            return iFace.get("Type");
+            return iFace.get(TYPE);
         }
 
         public void setInterface(Map<String, String> itf) {
@@ -75,7 +83,7 @@ public class Network extends OvmObject {
         }
 
         public String getName() {
-            return iFace.get("Name");
+            return iFace.get(NAME);
         }
 
         public String getPhysical() {
@@ -87,23 +95,39 @@ public class Network extends OvmObject {
         }
 
         public String getBroadcast() {
-            return iFace.get("Broadcast");
+            return iFace.get(BROADCAST);
         }
 
         public String getMac() {
-            return iFace.get("MAC");
+            return iFace.get(MAC);
         }
 
-        public String setName(String name) {
-            return iFace.put("Name", name);
+        public void setName(String name) {
+            iFace.put(NAME, name);
         }
 
-        public String setPhysical(String ph) {
-            return iFace.put(PHYSICAL, ph);
+        public void setPhysical(String ph) {
+            iFace.put(PHYSICAL, ph);
         }
 
-        public String setMac(String mac) {
-            return iFace.put("MAC", mac);
+        public void setMac(String mac) {
+            iFace.put(MAC, mac);
+        }
+
+        public void setAddress(String ip) {
+            iFace.put(ADDRESS, ip);
+        }
+
+        public void setBridge(String br) {
+            iFace.put(BRIDGE, br);
+        }
+
+        public void setNetmask(String mask) {
+            iFace.put(MASK, mask);
+        }
+
+        public void setVlan(String vlan) {
+            iFace.put(VLAN, vlan);
         }
     }
 
@@ -115,7 +139,7 @@ public class Network extends OvmObject {
             if (ADDRESS.equals(key)) {
                 match = iface.getValue().getAddress();
             }
-            if ("Name".equals(key)) {
+            if (NAME.equals(key)) {
                 match = iface.getKey();
             }
             if (match != null && match.equals(val)) {
@@ -134,10 +158,11 @@ public class Network extends OvmObject {
 
     public Network.Interface getInterfaceByName(String name)
             throws Ovm3ResourceException {
-        return getNetIface("Name", name);
+        Interface net = getNetIface(NAME, name);
+        return net;
     }
 
-    /* check if it is a BRIDGE */
+    /* check if it is a BRIDGE ? */
     public String getPhysicalByBridgeName(String name)
             throws Ovm3ResourceException {
         return getInterfaceByName(name).getPhysical();
@@ -145,9 +170,10 @@ public class Network extends OvmObject {
 
     public Network.Interface getBridgeByName(String name)
             throws Ovm3ResourceException {
-        if (getNetIface("Name", name) != null
-                && getNetIface("Name", name).getIfType().contentEquals(BRIDGE)) {
-            return getNetIface("Name", name);
+        getInterfaceList();
+        if (getNetIface(NAME, name) != null
+                && getNetIface(NAME, name).getIfType().contentEquals(BRIDGE)) {
+            return getNetIface(NAME, name);
         }
         LOGGER.debug("Unable to find bridge by name: " + name);
         setSuccess(false);
@@ -182,11 +208,14 @@ public class Network extends OvmObject {
     }
 
     /*
-     * Restriction: - data string that starts with leading spaces will be
-     * rejected ovs_if_meta('bond0',
-     * 'ethernet:c0a80100{192.168.1.0}:MANAGEMENT,CLUSTER_HEARTBEAT,LIVE_MIGRATE,VIRTUAL_MACHINE,STORAGE')
+     * /etc/sysconfig/network-scripts/meta-bond0
+     * METADATA=ethernet:c0a80100{192.168
+     * .1.0}:MANAGEMENT,CLUSTER_HEARTBEAT,LIVE_MIGRATE,VIRTUAL_MACHINE,STORAGE:
+     * Restriction: - data string that starts with leading spaces will b
+     * rejected ovs_if_meta(
+     * 'bond0','ethernet:c0a80100{192.168.1.0}:MANAGEMENT,CLUSTER_HEARTBEAT,LIVE_MIGRATE,VIRTUAL_MACHINE,STORAGE')
      */
-
+    // metadata can be incorporated...
     public Boolean discoverNetwork() throws Ovm3ResourceException {
         postDiscovery = callWrapper("discover_network");
         if (postDiscovery == null) {
@@ -226,7 +255,7 @@ public class Network extends OvmObject {
             Interface iface = new Interface();
             iface.setPhysical(nf.get("Basename"));
             iface.setName(p);
-            iface.setMac(nf.get("MAC"));
+            iface.setMac(nf.get(MAC));
             iface.setIfType(PHYSICAL);
             interfaceList.put(p, iface);
         }
@@ -243,8 +272,8 @@ public class Network extends OvmObject {
     }
 
     public Boolean stopOvsLocalConfig(String br) throws Ovm3ResourceException {
-        String s = (String) ovsLocalConfig("stop", br);
-        if (s.startsWith("stop")) {
+        String s = (String) ovsLocalConfig(STOP, br);
+        if (s.startsWith(STOP)) {
             return true;
         }
         return false;
@@ -285,8 +314,8 @@ public class Network extends OvmObject {
 
     public Boolean stopOvsBrConfig(String br, String dev)
             throws Ovm3ResourceException {
-        String s = (String) ovsBrConfig("stop", br, dev);
-        if (s.startsWith("stop")) {
+        String s = (String) ovsBrConfig(STOP, br, dev);
+        if (s.startsWith(STOP)) {
             return true;
         }
         return false;
@@ -300,8 +329,8 @@ public class Network extends OvmObject {
     /* 1 is untagged, goes till 4095 */
     public Boolean stopOvsVlanBridge(String br, String net, int vlan)
             throws Ovm3ResourceException {
-        String s = (String) ovsVlanBridge("stop", br, net, vlan);
-        if (s.startsWith("stop")) {
+        String s = (String) ovsVlanBridge(STOP, br, net, vlan);
+        if (s.startsWith(STOP)) {
             return true;
         }
         return false;
@@ -309,6 +338,7 @@ public class Network extends OvmObject {
 
     public Boolean startOvsVlanBridge(String br, String net, int vlan)
             throws Ovm3ResourceException {
+        // String phys = getPhysicalByBridgeName(net);
         String s = (String) ovsVlanBridge(START, br, net, vlan);
         /* 3.2.1 uses start, 3.3.1 and up uses added... */
         if (s.startsWith(START) || s.startsWith("Added")) {

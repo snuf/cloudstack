@@ -26,7 +26,8 @@ import org.junit.Test;
 
 import com.cloud.hypervisor.ovm3.objects.CloudstackPlugin.ReturnCode;
 
-public class CloudStackPluginTest {
+
+public class CloudstackPluginTest {
     private static final String VMNAME = "test";
     String domrIp = "169.254.3.2";
     public String getDomrIp() {
@@ -34,21 +35,31 @@ public class CloudStackPluginTest {
     }
 
     public String getDom0Ip() {
-        return dom0Ip;
+        return IP;
     }
 
     public Integer getDomrPort() {
         return domrPort;
     }
 
-    String dom0Ip = "192.168.1.64";
+    private String VLANINT = "xenbr0";
+    private Integer VLAN = 200;
+    private String CONTROL = "control0";
+    private String CONTROLMAC = "B2:D1:75:69:8C:58";
+    private String CONTROLIP = "169.254.0.1";
+    private String IP = "192.168.1.64";
+    private String B = "192.168.1.255";
+    private String MAC = "52:54:00:24:47:70";
+    private String BRIDGE = "virbr0";
+    private String INT = "mgmt0";
+
+    // String dom0Ip = "192.168.1.64";
     Integer domrPort = 3922;
     String host = "ovm-1";
     String path = "/tmp";
     String dirpath = "/tmp/testing";
     String filename = "test.txt";
     String content = "This is some content";
-    String bridge = "xenbr0";
     String vncPort = "5900";
     Integer port = 8899;
     Integer retries = 1;
@@ -58,6 +69,7 @@ public class CloudStackPluginTest {
     ConnectionTest con = new ConnectionTest();
     CloudstackPlugin cSp = new CloudstackPlugin(con);
     XmlTestResultTest results = new XmlTestResultTest();
+    NetworkTest net = new NetworkTest();
 
     String domrExecXml = "<?xml version='1.0'?>"
             + "<methodResponse>"
@@ -167,6 +179,76 @@ public class CloudStackPluginTest {
             + "</param>"
             + "</params>"
             + "</methodResponse>";
+    private String dom0BridgeTypeXml = results.simpleResponseWrapWrapper("linuxbridge");
+    private String switchControlBridgeXml = results.simpleResponseWrapWrapper("<struct>"
+            + "<member>"
+            + "<name>ip</name>"
+            + "<value><string>"+CONTROLIP+"</string></value>"
+            + "</member>"
+            + "<member>"
+            + "<name>mac</name>"
+            + "<value><string>"+CONTROLMAC+"</string></value>"
+            + "</member>"
+            + "<member>"
+            + "<name>mask</name>"
+            + "<value><string>16</string></value>"
+            + "</member>"
+            + "<member>"
+            + "<name>name</name>"
+            + "<value><string>"+CONTROL+"</string></value>"
+            + "</member>"
+            + "<member>"
+            + "<name>bridge</name>"
+            + "<value><string>"+CONTROL+"</string></value>"
+            + "</member>"
+            + "</struct>");
+    private String switchBridgeXml = results.simpleResponseWrapWrapper("<struct>"
+            + "<member>"
+            + "<name>ip</name>"
+            + "<value><string>"+IP+"</string></value>"
+            + "</member>"
+            + "<member>"
+            + "<name>mac</name>"
+            + "<value><string>"+MAC+"</string></value>"
+            + "</member>"
+            + "<member>"
+            + "<name>mask</name>"
+            + "<value><string>24</string></value>"
+            + "</member>"
+            + "<member>"
+            + "<name>name</name>"
+            + "<value><string>"+INT+"</string></value>"
+            + "</member>"
+            + "<member>"
+            + "<name>bridge</name>"
+            + "<value><string>"+BRIDGE+"</string></value>"
+            + "</member>"
+            + "</struct>");
+    private String switchNoBridgeXml = results.simpleResponseWrap("<struct>"
+            + "<member>"
+            + "<name>bridge</name>"
+            + "<value><string>test1</string></value>"
+            + "</member>"
+            + "<member>"
+            + "<name>name</name>"
+            + "<value><string>test1</string></value>"
+            + "</member>"
+            + "</struct>");
+    public String getSwitchBridgeNot() {
+        return switchNoBridgeXml;
+    }
+    public String getSwitchBridgeXml() {
+        return switchBridgeXml;
+    }
+    public String getSwitchControlBridgeXml() {
+        return switchControlBridgeXml;
+    }
+    public String getDom0BridgeTypeXml() {
+        return dom0BridgeTypeXml;
+    }
+    public void setDom0BridgeTypeXml(String s) {
+        dom0BridgeTypeXml = results.simpleResponseWrapWrapper(s);;
+    }
     public String getDom0StorageCheckXml() {
         return dom0StorageCheckXml;
     }
@@ -226,9 +308,9 @@ public class CloudStackPluginTest {
     @Test
     public void testDom0Ip() throws Ovm3ResourceException {
         con.setResult(results.getBoolean(true));
-        results.basicBooleanTest(cSp.dom0HasIp(dom0Ip));
+        results.basicBooleanTest(cSp.dom0HasIp(IP));
         con.setResult(results.getBoolean(false));
-        results.basicBooleanTest(cSp.dom0HasIp(dom0Ip), false);
+        results.basicBooleanTest(cSp.dom0HasIp(IP), false);
     }
 
     @Test
@@ -255,7 +337,7 @@ public class CloudStackPluginTest {
     @Test
     public void testOvsDom0Stats() throws Ovm3ResourceException {
         con.setResult(dom0StatsXml);
-        Map<String, String> stats = cSp.ovsDom0Stats(bridge);
+        Map<String, String> stats = cSp.ovsDom0Stats(BRIDGE);
         results.basicStringTest(stats.get("cpu"), "1.5");
     }
 

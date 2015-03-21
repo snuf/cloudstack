@@ -19,6 +19,8 @@ package com.cloud.hypervisor.ovm3.objects;
 
 import org.junit.Test;
 
+import com.cloud.hypervisor.ovm3.support.Ovm3SupportTest;
+
 public class NetworkTest {
     ConnectionTest con = new ConnectionTest();
     Network net = new Network(con);
@@ -61,7 +63,6 @@ public class NetworkTest {
     public String getControl() {
         return CONTROL;
     }
-
     private String VLANINT = "xenbr0";
     private Integer VLAN = 200;
     private String CONTROL = "control0";
@@ -336,9 +337,11 @@ public class NetworkTest {
         String resp = "bridge=" + VLANINT + "." + VLAN.toString() + " netdev="
                 + VLANBR + " vlan " + VLAN.toString();
         con.setResult(results.simpleResponseWrap("start " + resp));
+        con.setMethodResponse("ovs_vlan_bridge", results.simpleResponseWrap("start " + resp));
         results.basicBooleanTest(net.startOvsVlanBridge(
                 VLANINT + "." + VLAN.toString(), VLANBR, VLAN));
         con.setResult(results.simpleResponseWrap("stop " + resp));
+        con.setMethodResponse("ovs_vlan_bridge", results.simpleResponseWrap("stop " + resp));
         results.basicBooleanTest(net.stopOvsVlanBridge(
                 VLANINT + "." + VLAN.toString(), VLANBR, VLAN));
     }

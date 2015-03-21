@@ -28,7 +28,7 @@ import com.cloud.agent.api.routing.IpAssocCommand;
 import com.cloud.agent.api.routing.IpAssocVpcCommand;
 import com.cloud.agent.api.routing.NetworkElementCommand;
 import com.cloud.agent.api.to.IpAddressTO;
-import com.cloud.hypervisor.ovm3.objects.CloudStackPluginTest;
+import com.cloud.hypervisor.ovm3.objects.CloudstackPluginTest;
 import com.cloud.hypervisor.ovm3.objects.ConnectionTest;
 import com.cloud.hypervisor.ovm3.objects.LinuxTest;
 import com.cloud.hypervisor.ovm3.objects.NetworkTest;
@@ -51,7 +51,7 @@ public class Ovm3VirtualRoutingResourceTest {
     XenTest xen = new XenTest();
     NetworkTest net = new NetworkTest();
     LinuxTest linux = new LinuxTest();
-    CloudStackPluginTest csp = new CloudStackPluginTest();
+    CloudstackPluginTest csp = new CloudstackPluginTest();
     String dom0Ip = csp.getDom0Ip();
     String domrIp = csp.getDomrIp();
     String routerip = "64.1.1.10";

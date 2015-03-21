@@ -22,6 +22,8 @@ import java.util.Map;
 
 import org.apache.log4j.Logger;
 
+import com.cloud.hypervisor.ovm3.objects.Network.Interface;
+
 public class CloudstackPlugin extends OvmObject {
     private static final Logger LOGGER = Logger
             .getLogger(CloudstackPlugin.class);
@@ -179,7 +181,65 @@ public class CloudstackPlugin extends OvmObject {
     public boolean ovsMkdirs(String dir) throws Ovm3ResourceException{
         return (Boolean) nullIsTrueCallWrapper("ovs_mkdirs", dir);
     }
-    public boolean ovsMkdirs(String dir, Integer mode) throws Ovm3ResourceException{
+    public boolean ovsMkdirs(String dir, Integer mode) throws Ovm3ResourceException {
         return (Boolean) nullIsTrueCallWrapper("ovs_mkdirs", dir, mode);
+    }
+    public String dom0BridgeType() throws Ovm3ResourceException {
+        return (String) callWrapper("get_bridge_type");
+    }
+
+    /* network related bits for Openvswitch */
+    public String getVswitchBridgeNameByIp(String ip)
+            throws Ovm3ResourceException {
+        HashMap<String, String> x = (HashMap<String, String>) callWrapper(
+                "get_vswitch_interface_by_ip", ip);
+        if (x == null) {
+            return null;
+        }
+        return x.get("bridge");
+    }
+
+    public String getVswitchBridgeIpByName(String name)
+            throws Ovm3ResourceException {
+        return getBridgeByName(name).getAddress();
+    }
+
+    public boolean setNicIp(String iface, String ip, String mask)
+            throws Ovm3ResourceException {
+        return (Boolean) callWrapper("set_iface_ip", iface, ip, mask);
+    }
+
+    private Interface fillInterface(HashMap<String, String> x) {
+        Interface netint = new Interface();
+        netint.setName(x.get("name"));
+        netint.setAddress(x.get("ip"));
+        netint.setMac(x.get("mac"));
+        netint.setBridge(x.get("bridge"));
+        netint.setNetmask(x.get("netmask"));
+        netint.setVlan(x.get("vlan"));
+        return netint;
+    }
+    public Interface getBridgeByName(String name) throws Ovm3ResourceException {
+        HashMap<String, String> x = (HashMap<String, String>) callWrapper(
+                "get_vswitch_interface_by_name", name);
+        if (x == null) {
+            return null;
+        }
+        return fillInterface(x);
+    }
+    public boolean delVswitchBridge(String brName) throws Ovm3ResourceException {
+        if (fillInterface((HashMap<String, String>) callWrapper(
+                "del_vswitch_vlan_bridge", brName)).getMac() == null){
+            return true;
+        }
+        return false;
+    }
+    public boolean addVswitchBridge(String brName, String netName,
+            Integer vlanId) throws Ovm3ResourceException {
+        if (fillInterface((HashMap<String, String>) callWrapper(
+                "add_vswitch_vlan_bridge", brName, netName, vlanId)).getMac() == null){
+            return true;
+        }
+        return false;
     }
 }
