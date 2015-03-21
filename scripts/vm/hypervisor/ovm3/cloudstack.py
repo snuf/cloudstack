@@ -137,6 +137,7 @@ def set_iface_ip(iface, ip, mask):
     try:
         out = call_prog('ip', ['addr', 'add', "%s/%s" % (ip, mask), 'dev', iface])
         if check_iface_ip(iface, ip):
+            call_prog('ip', ['link', 'set', iface, 'up'])
             return True
     except Exception, e:
         print e
