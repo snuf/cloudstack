@@ -19,8 +19,6 @@ package com.cloud.hypervisor.ovm3.objects;
 
 import org.junit.Test;
 
-import com.cloud.hypervisor.ovm3.support.Ovm3SupportTest;
-
 public class NetworkTest {
     ConnectionTest con = new ConnectionTest();
     Network net = new Network(con);
