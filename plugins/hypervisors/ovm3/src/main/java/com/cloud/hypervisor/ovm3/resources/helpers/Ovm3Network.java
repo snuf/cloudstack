@@ -41,7 +41,6 @@ public class Ovm3Network {
     }
 
     public Network.Interface getBridgeByName(String name) throws Ovm3ResourceException {
-        System.out.println("bridge: " + _bridgeType);
         switch (_bridgeType) {
             case OPENVSWITCH:
                 return csp.getBridgeByName(name);

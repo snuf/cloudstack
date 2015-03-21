@@ -275,7 +275,7 @@ def check_domr_port(ip, port=domrPort, timeout=3):
 
 # check ssh
 def check_domr_ssh(ip, port=domrPort, timeout=10):
-    x = self.exec_domr(ip, "", port=port, timeout=timeout)
+    x = exec_domr(ip, "", port=port, timeout=timeout)
     if (x.get("rc") == 0):
         return True
     return False
