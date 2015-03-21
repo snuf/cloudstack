@@ -21,8 +21,6 @@ import javax.naming.ConfigurationException;
 import org.junit.Test;
 import com.cloud.hypervisor.ovm3.support.Ovm3SupportTest;
 
-import com.cloud.hypervisor.ovm3.support.Ovm3SupportTest;
-
 public class NetworkTest {
     ConnectionTest con = new ConnectionTest();
     Network net = new Network(con);
