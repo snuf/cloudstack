@@ -337,10 +337,8 @@ public class NetworkTest {
         Ovm3SupportTest support = new Ovm3SupportTest();
         con = support.prepConnectionResults();
         Network net = new Network(con);
-
         String resp = "bridge=" + VLANINT + "." + VLAN.toString() + " netdev="
                 + VLANBR + " vlan " + VLAN.toString();
-        System.out.println(resp);
         con.setMethodResponse("ovs_vlan_bridge", results.simpleResponseWrap("start " + resp));
         results.basicBooleanTest(net.startOvsVlanBridge(
                 VLANINT + "." + VLAN.toString(), VLANBR, VLAN));
