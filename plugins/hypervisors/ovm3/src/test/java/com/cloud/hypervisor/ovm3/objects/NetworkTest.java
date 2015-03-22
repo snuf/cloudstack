@@ -17,7 +17,9 @@
 
 package com.cloud.hypervisor.ovm3.objects;
 
+import javax.naming.ConfigurationException;
 import org.junit.Test;
+import com.cloud.hypervisor.ovm3.support.Ovm3SupportTest;
 
 public class NetworkTest {
     ConnectionTest con = new ConnectionTest();
@@ -331,10 +333,14 @@ public class NetworkTest {
     }
 
     @Test
-    public void testVlanBridge() throws Ovm3ResourceException {
+    public void testVlanBridge() throws Ovm3ResourceException, ConfigurationException {
+        Ovm3SupportTest support = new Ovm3SupportTest();
+        con = support.prepConnectionResults();
+        Network net = new Network(con);
+
         String resp = "bridge=" + VLANINT + "." + VLAN.toString() + " netdev="
                 + VLANBR + " vlan " + VLAN.toString();
-        con.setResult(results.simpleResponseWrap("start " + resp));
+        System.out.println(resp);
         con.setMethodResponse("ovs_vlan_bridge", results.simpleResponseWrap("start " + resp));
         results.basicBooleanTest(net.startOvsVlanBridge(
                 VLANINT + "." + VLAN.toString(), VLANBR, VLAN));
