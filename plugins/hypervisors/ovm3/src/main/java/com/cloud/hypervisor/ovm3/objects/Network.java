@@ -165,7 +165,10 @@ public class Network extends OvmObject {
     /* check if it is a BRIDGE ? */
     public String getPhysicalByBridgeName(String name)
             throws Ovm3ResourceException {
-        return getInterfaceByName(name).getPhysical();
+        if (getInterfaceByName(name).getPhysical() != null) {
+            return getInterfaceByName(name).getPhysical();
+        }
+        return getInterfaceByName(name).getName();
     }
 
     public Network.Interface getBridgeByName(String name)
@@ -338,8 +341,8 @@ public class Network extends OvmObject {
 
     public Boolean startOvsVlanBridge(String br, String net, int vlan)
             throws Ovm3ResourceException {
-        // String phys = getPhysicalByBridgeName(net);
-        String s = (String) ovsVlanBridge(START, br, net, vlan);
+        String phys = getPhysicalByBridgeName(net);
+        String s = (String) ovsVlanBridge(START, br, phys, vlan);
         /* 3.2.1 uses start, 3.3.1 and up uses added... */
         if (s.startsWith(START) || s.startsWith("Added")) {
             return true;
