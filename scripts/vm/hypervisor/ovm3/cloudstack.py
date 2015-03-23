@@ -31,6 +31,7 @@ import tempfile
 import logging
 import logging.handlers
 import string
+import shlex
 
 from xen.util.xmlrpcclient import ServerProxy
 from xmlrpclib import Error
@@ -103,11 +104,17 @@ def get_module_version():
 def call(msg):
     return msg
 
-def call_prog(prog, args):
-    cmd = [prog ] + args
+def call_prog(prog, args, shell=False):
+    cmd = [ prog ] + args
     try:
-        out = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        return out
+	if shell:
+            cmd=string.join(cmd)
+	p = subprocess.Popen(cmd,
+            stdout = subprocess.PIPE,
+            stderr = subprocess.PIPE,
+	    shell=shell)
+        out, err = p.communicate()
+        return (p.returncode, out, err)
     except Exception, e:
         print e
 
@@ -115,18 +122,20 @@ def call_prog(prog, args):
 # Openvswitch related
 #####
 def ovs_vsctl(args):
+    # [ "-vconsole:off" ]
+    cmd = [ "ovs-vsctl", "-vconsole:off" ] + args
     return call_prog("ovs-vsctl", [ "-vconsole:off" ] + args)
 
 def get_vswitch_bits(cmd):
     l=[]
-    out = ovs_vsctl(cmd).stdout
-    for line in out:
+    rc, out, err = ovs_vsctl(cmd)
+    for line in string.split(out,"\n"):
         l.append(line.rstrip('\n'))
     return l
 
 def check_iface_ip(iface, ip):
-    out = call_prog('ip', [ 'addr', 'show', iface ])
-    for line in out.stdout:
+    rc, out, err = call_prog('ip', [ 'addr', 'show', iface ])
+    for line in string.split(out,"\n"):
         if re.search(ip, line):
             return True
     return False
@@ -135,37 +144,48 @@ def set_iface_ip(iface, ip, mask):
     if check_iface_ip(iface, ip):
         return True
     try:
-        out = call_prog('ip', ['addr', 'add', "%s/%s" % (ip, mask), 'dev', iface])
+        rc, out, err = call_prog('ip', ['addr', 'add', "%s/%s" % (ip, mask), 'dev', iface])
         if check_iface_ip(iface, ip):
-            call_prog('ip', ['link', 'set', iface, 'up'])
-            return True
+            rc, out, err = call_prog('ip', ['link', 'set', iface, 'up'])
+	    if rc == 0:
+            	return True
     except Exception, e:
         print e
     return False
 
 def get_interface_bridge(name):
     bridge=get_vswitch_bits(['iface-to-br', name])
-    if not bridge:
+    if not bridge or bridge[0] == "":
         return name
     else:
         return bridge[0]
 
 def add_vswitch_vlan_bridge(name, bridge, vlan):
-    if 'mac' in  get_vswitch_interface_by_name(name):
-        return get_vswitch_interface_by_name(name)
-    ovs_vsctl(["add-br", name, bridge, vlan])
-    return get_vswitch_interface_by_name(name)
+    iface=get_vswitch_interface_by_name(name)
+    if iface:
+        return iface
+    rc, out, err = ovs_vsctl(["add-br", name, bridge, "%s" % str(vlan)])
+    if rc != 0:
+        return iface
+    x=5
+    while(x):
+	iface=get_vswitch_interface_by_name(name)
+	if iface:
+	    return iface
+	x=x-1
+	time.sleep(1)
+    return None
 
 def del_vswitch_vlan_bridge(name):
     if get_vswitch_interface_by_name(name):
-        ovs_vsctl(["del-br", name]).returncode
+        rc, out, err = ovs_vsctl(["del-br", name])
     return get_vswitch_interface_by_name(name)
 
 def get_vswitch_interface_by_ip(ip):
     iface={}
     pline=""
-    out = call_prog('ip', ['addr', 'show'])
-    for line in out.stdout:
+    rc, out, err = call_prog('ip', ['addr', 'show'])
+    for line in string.split(out,"\n"):
         if re.search(ip, line):
             el = string.split(line)
             mac = string.split(pline)
@@ -180,8 +200,8 @@ def get_vswitch_interface_by_ip(ip):
 def get_vswitch_interface_by_name(name):
     iface={}
     iface['name'] = name
-    out = call_prog('ip', ['addr', 'show', name])
-    for line in out.stdout:
+    rc, out, err = call_prog('ip', ['addr', 'show', name])
+    for line in string.split(out,"\n"):
         if re.search("^\s+link/ether", line):
             iface['mac']=string.split(line)[1]
         if re.search("^\s+inet", line):
@@ -190,6 +210,8 @@ def get_vswitch_interface_by_name(name):
             iface['ip']=ip
             iface['mask']=mask
     iface['bridge']=get_interface_bridge(name)
+    if 'mac' not in iface:
+	return None
     return iface
 
 def get_bridge_type():
