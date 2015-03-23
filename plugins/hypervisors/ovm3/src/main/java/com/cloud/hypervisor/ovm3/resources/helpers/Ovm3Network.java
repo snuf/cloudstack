@@ -94,7 +94,6 @@ public class Ovm3Network {
     public boolean stopOvsVlanBridge(String brName, String netName, int vlan) throws Ovm3ResourceException {
         switch (_bridgeType) {
             case OPENVSWITCH:
-                LOGGER.debug("Not implemented for openvswitch, can be though!");
                 return csp.delVswitchBridge(brName);
             case LINUXBRIDGE:
             default:
@@ -105,7 +104,6 @@ public class Ovm3Network {
             Integer vlanId) throws Ovm3ResourceException {
         switch (_bridgeType) {
             case OPENVSWITCH:
-                LOGGER.debug("Not implemented for openvswitch, can be though!");
                 return csp.addVswitchBridge(brName, netName, vlanId);
             case LINUXBRIDGE:
             default:
