@@ -27,7 +27,6 @@ import javax.inject.Inject;
 import javax.naming.ConfigurationException;
 
 import org.apache.log4j.Logger;
-
 import org.apache.cloudstack.storage.command.AttachCommand;
 import org.apache.cloudstack.storage.command.CopyCommand;
 import org.apache.cloudstack.storage.command.CreateObjectCommand;
@@ -342,10 +341,16 @@ public class Ovm3HypervisorResource extends ServerResourceBase implements
     @Override
     public boolean configure(String name, Map<String, Object> params)
             throws ConfigurationException {
-        LOGGER.debug("configure " + name + " with params: " + params);
+        if (LOGGER.isDebugEnabled()) {
+            Map<String, Object> ll = new HashMap<String,Object>(params);
+            ll.remove("password");
+            ll.remove("agentpassword");
+            LOGGER.debug("configure " + name + " with params: " + ll);
+        }
         /* check if we're master or not and if we can connect */
         try {
             configuration = new Ovm3Configuration(params);
+            
             if (!configuration.getIsTest()) {
                 c = new Connection(configuration.getAgentIp(),
                         configuration.getAgentOvsAgentPort(),
@@ -361,7 +366,7 @@ public class Ovm3HypervisorResource extends ServerResourceBase implements
             hypervisorsupport.masterCheck();
         } catch (Exception e) {
             throw new CloudRuntimeException("Base checks failed for "
-                    + configuration.getAgentHostname(), e);
+                    + configuration.getAgentHostname() + " " + e.getMessage(), e);
         }
         hypervisornetwork = new Ovm3HypervisorNetwork(c, configuration);
         hypervisornetwork.configureNetworking();

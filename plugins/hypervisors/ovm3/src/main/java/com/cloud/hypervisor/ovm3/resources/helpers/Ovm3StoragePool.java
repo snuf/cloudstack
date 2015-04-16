@@ -165,7 +165,9 @@ public class Ovm3StoragePool {
                     return true;
                 } else {
                     String msg = "Host " + config.getAgentHostname()
-                            + " already part of a pool, and not owned by us";
+                            + " already part of a pool, and not owned by us: "
+                            + host.getManagerUuid() + " doesn't match "
+                            + config.getAgentOwnedByUuid();
                     LOGGER.error(msg);
                     throw new ConfigurationException(msg);
                 }

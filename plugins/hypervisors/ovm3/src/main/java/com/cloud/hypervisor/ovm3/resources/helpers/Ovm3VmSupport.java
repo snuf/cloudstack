@@ -107,6 +107,7 @@ public class Ovm3VmSupport {
     }
 
     /* should add bitrates and latency... */
+    /* should call plugNic here!!! */
     private Boolean createVif(Xen.Vm vm, NicTO nic)
             throws Ovm3ResourceException {
         try {
