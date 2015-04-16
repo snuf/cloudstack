@@ -1373,6 +1373,7 @@ public class XenTest {
         /* getVncPort doesn't work with live config due to a bug in the agent */
         // results.basicIntTest(domU.getVncPort(), 5900);
         results.basicStringTest(domU.getVmName(), VMNAME);
+        System.out.println(domU.getVmDisks());
         results.basicIntTest(domU.getVifIdByMac(VMNICMAC), 0);
         results.basicIntTest(domU.getVifIdByMac("02:00:50:9a:00:02"), 1);
         results.basicIntTest(domU.getVifIdByMac("02:00:50:9a:00:03"), -1);

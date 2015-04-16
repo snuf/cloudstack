@@ -108,9 +108,16 @@ public class Connection extends XmlRpcClient {
     public Object callTimeoutInSec(String method, List<?> params, int timeout,
             boolean debug) throws XmlRpcException {
         TimingOutCallback callback = new TimingOutCallback(timeout * 1000);
-        if (debug) {
-            LOGGER.debug("Call Ovm3 agent " + hostName + "(" + hostIp +"): " + method
-                    + " with " + params);
+        String call = "Call Ovm3 agent " + hostName + "(" + hostIp +"): " + method
+                + " content: ";
+        if (debug && !LOGGER.isTraceEnabled()) {
+            if (!method.contentEquals("ovs_upload_ssh_key")) {
+                LOGGER.debug(call + params);
+            } else {
+                LOGGER.debug(call + "censored");     
+            }
+        } else {
+            LOGGER.debug(call + params);
         }
         long startTime = System.currentTimeMillis();
         try {
