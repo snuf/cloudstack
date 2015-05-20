@@ -350,7 +350,7 @@ public class Ovm3HypervisorResource extends ServerResourceBase implements
         /* check if we're master or not and if we can connect */
         try {
             configuration = new Ovm3Configuration(params);
-            
+
             if (!configuration.getIsTest()) {
                 c = new Connection(configuration.getAgentIp(),
                         configuration.getAgentOvsAgentPort(),

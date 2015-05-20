@@ -114,7 +114,7 @@ public class Connection extends XmlRpcClient {
             if (!method.contentEquals("ovs_upload_ssh_key")) {
                 LOGGER.debug(call + params);
             } else {
-                LOGGER.debug(call + "censored");     
+                LOGGER.debug(call + "censored");
             }
         } else {
             LOGGER.debug(call + params);
