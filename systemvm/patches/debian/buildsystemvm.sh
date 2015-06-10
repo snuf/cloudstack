@@ -27,76 +27,91 @@ set -x
 IMAGENAME=systemvm
 LOCATION=/var/lib/images/systemvm
 PASSWORD=password
-#APT_PROXY=192.168.1.115:3142/
 APT_PROXY=
+APT_PROXY=http://192.168.1.60:3142/debian
 HOSTNAME=systemvm
 SIZE=2000
 DEBIAN_MIRROR=ftp.us.debian.org/debian
 MINIMIZE=true
-CLOUDSTACK_RELEASE=4.0
+CLOUDSTACK_RELEASE=4.6.0
 offset=4096
+arch=amd64
+REL=jessie
+IMAGE=$LOCATION/$IMAGENAME.img
+MOUNTPOINT=/mnt/$IMAGENAME
+export JAMMING=""
+##
+#
+##
 baseimage() {
-  mkdir -p $LOCATION
-  #dd if=/dev/zero of=$IMAGELOC bs=1M  count=$SIZE
-  dd if=/dev/zero of=$IMAGELOC bs=1M seek=$((SIZE - 1)) count=1
-  loopdev=$(losetup -f)
-  losetup $loopdev $IMAGELOC
-  parted $loopdev -s 'mklabel msdos'
-  parted $loopdev -s 'mkpart primary ext3 4096B -1'
-  sleep 2 
-  losetup -d $loopdev
-  loopdev=$(losetup --show -o $offset -f $IMAGELOC )
-  mkfs.ext3  -L ROOT $loopdev
-  mkdir -p $MOUNTPOINT
-  tune2fs -c 100 -i 0 $loopdev
-  sleep 2 
-  losetup -d $loopdev
-  
-  mount -o loop,offset=$offset $IMAGELOC  $MOUNTPOINT
-  
-  #debootstrap --variant=minbase --keyring=/usr/share/keyrings/debian-archive-keyring.gpg wheezy $MOUNTPOINT http://${APT_PROXY}${DEBIAN_MIRROR}
-  debootstrap --variant=minbase --arch=i386 wheezy $MOUNTPOINT http://${APT_PROXY}${DEBIAN_MIRROR}
+    type=$1
+    # -debopt \"--variant=minbase\"
+    opts="--release $REL --hostname $HOSTNAME --packages /etc/debootstrap/packages-jessie --password $PASSWORD --mirror $APT_PROXY --force"
+    if [ "$type" == "ISO" ]
+    then
+        export JAMMING="true"
+        # Add user, hostname and check if second iso device might work, systemvm.iso...
+
+        # grml-debootstrap --target $MOUNTPOINT $opts
+        debootstrap --arch amd64  "--variant=minbase" jessie /mnt/systemvm http://192.168.1.60:3142/debian
+        sudo mount -o bind /dev $MOUNTPOINT/dev
+        sudo mount -o bind /proc $MOUNTPOINT/proc
+        chroot $MOUNTPOINT apt-get install -y linux-image-amd64  --no-install-recommends
+        bash /etc/debootstrap/scripts/script-jessie
+        cp /etc/debootstrap/packages-jessie $MOUNTPOINT/root/
+        chroot $MOUNTPOINT apt-get install -y initramfs-tools live-boot live-boot-initramfs-tools `cat /etc/debootstrap/packages-jessie`  --no-install-recommends
+        scriptdir="${HOME}/cloudstack/systemvm/patches/debian"
+        cd $MOUNTPOINT
+        mkdir -p binary/live && mkdir -p binary/isolinux
+        rm vmlinux
+        rm initrd.img
+        ln -s boot/vmlinux-3.16.0-4-amd64 vmlinux
+        ln -s boot/initrd.img-3.16.0-4-amd64 initrd.img
+        cp vmlinux binary/live/
+        cp vmlinuz binary/live/
+        cp initrd.img binary/live/
+        mksquashfs /mnt/systemvm binary/live/filesystem.squashfs -comp xz -e boot
+        cp /usr/lib/syslinux/isolinux.bin binary/isolinux/.
+        cp /usr/lib/syslinux/menu.c32 binary/isolinux/.
+        cat > binary/isolinux/isolinux.cfg << EOF
+ui menu.c32
+prompt 0
+menu title Boot Menu
+timeout 100
+
+label live-amd64
+    menu label ^Live (amd64)
+    menu default
+    linux /live/vmlinuz
+    append initrd=/live/initrd.img boot=live persistence console=ttyS0 root=/dev/hda
+
+label live-amd64-failsafe
+    menu label ^Live (amd64 failsafe)
+    linux /live/vmlinuz
+    append initrd=/live/initrd.img boot=live persistence config memtest noapic noapm nodma nomce nolapic nomodeset nosmp nosplash vga=normal console=ttyS0 root=/dev/hda
+
+endtexta
+EOF
+        xorriso -as mkisofs -r -J -joliet-long -l -cache-inodes -isohybrid-mbr /usr/lib/syslinux/isohdpfx.bin -partition_offset 16 -A "Debian Live"  -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -o remaster.iso binary
+
+    else
+        opts="$opts --vmfile --vmsize ${SIZE}M --target $IMAGE"
+        grml-debootstrap $opts
+        sudo kpartx -a $IMAGE
+        if [ ! -d $TM ]
+        then
+            sudo mkdir $TM
+        fi
+        lod=$(sudo kpartx -l $IMAGE | awk -F: '{print $1}')
+        sudo kpartx -a $IMAGE
+        sudo mount /dev/mapper/$lod $MOUNTPOINT
+        sudo mount -o bind /dev $MOUNTPOINT/dev
+        sudo mount -o bind /proc $MOUNTPOINT/proc
+        sudo chroot $MOUNTPOINT update-grub
+    fi
 }
 
-
 fixapt() {
-  if [ "$APT_PROXY" != "" ]; then
-  cat >> etc/apt/apt.conf.d/01proxy << EOF
-Acquire::http::Proxy "http://${APT_PROXY}";
-EOF
-  fi
-
-  cat > etc/apt/sources.list << EOF
-deb http://http.debian.net/debian/ wheezy main contrib non-free
-deb-src http://http.debian.net/debian/ wheezy main contrib non-free
-
-deb http://security.debian.org/ wheezy/updates main
-deb-src http://security.debian.org/ wheezy/updates main
-
-deb http://http.debian.net/debian/ wheezy-backports main
-deb-src http://http.debian.net/debian/ wheezy-backports main
-EOF
-
-  cat >> etc/apt/apt.conf << EOF
-APT::Default-Release "stable"; 
-EOF
-
-  cat >> etc/apt/preferences << EOF
-Package: *
-Pin: release o=Debian,a=stable
-Pin-Priority: 900
-EOF
-
-  #apt-key exportall | chroot . apt-key add - &&
-  chroot . apt-get update &&
-  echo "Apt::Install-Recommends 0;" > etc/apt/apt.conf.d/local-recommends
-
-  cat >> usr/sbin/policy-rc.d  << EOF
-#!/bin/sh
-exit 101
-EOF
-  chmod a+x usr/sbin/policy-rc.d
-
   cat >> etc/default/locale  << EOF
 LANG=en_US.UTF-8
 LC_ALL=en_US.UTF-8
@@ -114,7 +129,6 @@ EOF
 }
 
 network() {
-
   echo "$HOSTNAME" > etc/hostname &&
   cat > etc/hosts << EOF 
 127.0.0.1       localhost
@@ -137,253 +151,12 @@ iface eth0 inet static
 EOF
 }
 
-install_kernel() {
-  DEBIAN_FRONTEND=noninteractive
-  DEBIAN_PRIORITY=critical
-  export DEBIAN_FRONTEND DEBIAN_PRIORITY
-
-  chroot . apt-get -qq -y --force-yes install grub-legacy &&
-  cp -av usr/lib/grub/i386-pc boot/grub
-  #for some reason apt-get install grub does not install grub/stage1 etc
-  #loopd=$(losetup -f --show $1)
-  #grub-install $loopd --root-directory=$MOUNTPOINT
-  #losetup -d $loopd
-  grub  << EOF &&
-device (hd0) $1
-root (hd0,0)
-setup (hd0)
-quit
-EOF
-   # install a kernel image
-   cat > etc/kernel-img.conf << EOF &&
-do_symlinks = yes
-link_in_boot = yes
-do_initrd = yes
-EOF
-  touch /mnt/systemvm/boot/grub/default
-  chroot . apt-get install -qq -y --force-yes linux-image-686-bigmem
-  cat >> etc/kernel-img.conf << EOF
-postinst_hook = /usr/sbin/update-grub
-postrm_hook   = /usr/sbin/update-grub
-EOF
-}
-
-
-fixgrub() {
-  kern=$(basename $(ls  boot/vmlinuz-*))
-  ver=${kern#vmlinuz-}
-  cat > boot/grub/menu.lst << EOF
-default 0
-timeout 2
-color cyan/blue white/blue
-
-### BEGIN AUTOMAGIC KERNELS LIST
-# kopt=root=LABEL=ROOT ro
-
-## ## End Default Options ##
-title		Debian GNU/Linux, kernel $ver
-root		(hd0,0)
-kernel		/boot/$kern root=LABEL=ROOT ro console=tty0 xencons=ttyS0,115200 console=hvc0 quiet
-initrd		/boot/initrd.img-$ver
-
-### END DEBIAN AUTOMAGIC KERNELS LIST
-EOF
-  (cd boot/grub; ln -s menu.lst grub.conf)
-}
-
-fixinittab() {
-  cat >> etc/inittab << EOF
-
-vc:2345:respawn:/sbin/getty 38400 hvc0
-EOF
-}
-
-fixfstab() {
-  cat > etc/fstab << EOF
-# <file system> <mount point>   <type>  <options>       <dump>  <pass>
-proc            /proc           proc    defaults        0       0
-LABEL=ROOT      /               ext3    errors=remount-ro,sync,noatime 0       1
-EOF
-}
-
-fixacpid() {
-  mkdir -p etc/acpi/events
-  cat >> etc/acpi/events/power << EOF
-event=button/power.*
-action=/usr/local/sbin/power.sh "%e"
-EOF
-  cat >> usr/local/sbin/power.sh << EOF
-#!/bin/bash
-/sbin/poweroff
-EOF
-  chmod a+x usr/local/sbin/power.sh
-}
-
-fixiptables() {
-cat >> etc/modules << EOF
-nf_conntrack
-nf_conntrack_ipv4
-EOF
-cat > etc/init.d/iptables-persistent << EOF
-#!/bin/sh
-### BEGIN INIT INFO
-# Provides:          iptables
-# Required-Start:    mountkernfs $local_fs
-# Required-Stop:     $local_fs
-# Should-Start:      cloud-early-config
-# Default-Start:     S
-# Default-Stop:     
-# Short-Description: Set up iptables rules
-### END INIT INFO
-
-PATH="/sbin:/bin:/usr/sbin:/usr/bin"
-
-# Include config file for iptables-persistent
-. /etc/iptables/iptables.conf
-
-case "\$1" in
-start)
-    if [ -e /var/run/iptables ]; then
-        echo "iptables is already started!"
-        exit 1
-    else
-        touch /var/run/iptables
-    fi
-
-    if [ \$ENABLE_ROUTING -ne 0 ]; then
-        # Enable Routing
-        echo 1 > /proc/sys/net/ipv4/ip_forward
-    fi
-
-    # Load Modules
-    modprobe -a \$MODULES
-
-    # Load saved rules
-    if [ -f /etc/iptables/rules ]; then
-        iptables-restore </etc/iptables/rules
-    fi
-    ;;
-stop|force-stop)
-    if [ ! -e /var/run/iptables ]; then
-        echo "iptables is already stopped!"
-        exit 1
-    else
-        rm /var/run/iptables
-    fi
-
-    if [ \$SAVE_NEW_RULES -ne 0 ]; then
-        # Backup old rules
-        cp /etc/iptables/rules /etc/iptables/rules.bak
-        # Save new rules
-        iptables-save >/etc/iptables/rules
-    fi
-
-    # Restore Default Policies
-    iptables -P INPUT ACCEPT
-    iptables -P FORWARD ACCEPT
-    iptables -P OUTPUT ACCEPT
-
-    # Flush rules on default tables
-    iptables -F
-    iptables -t nat -F
-    iptables -t mangle -F
-
-    # Unload previously loaded modules
-    modprobe -r \$MODULES
-
-    # Disable Routing if enabled
-    if [ \$ENABLE_ROUTING -ne 0 ]; then
-        # Disable Routing
-        echo 0 > /proc/sys/net/ipv4/ip_forward
-    fi
-
-    ;;
-restart|force-reload)
-    \$0 stop
-    \$0 start
-    ;;
-status)
-    echo "Filter Rules:"
-    echo "--------------"
-    iptables -L -v
-    echo ""
-    echo "NAT Rules:"
-    echo "-------------"
-    iptables -t nat -L -v
-    echo ""
-    echo "Mangle Rules:"
-    echo "----------------"
-    iptables -t mangle -L -v
-    ;;
-*)
-    echo "Usage: \$0 {start|stop|force-stop|restart|force-reload|status}" >&2
-    exit 1
-    ;;
-esac
-
-exit 0
-EOF
-  chmod a+x etc/init.d/iptables-persistent
-
-
-  touch etc/iptables/iptables.conf 
-  cat > etc/iptables/iptables.conf << EOF
-# A basic config file for the /etc/init.d/iptable-persistent script
-
-# Should new manually added rules from command line be saved on reboot? Assign to a value different that 0 if you want this enabled.
-SAVE_NEW_RULES=0
-
-# Modules to load:
-MODULES="nf_nat_ftp nf_conntrack_ftp"
-
-# Enable Routing?
-ENABLE_ROUTING=1
-EOF
-  chmod a+x etc/iptables/iptables.conf
-
-}
-
 vpn_config() {
   cp -r ${scriptdir}/vpn/* ./
 }
 
-packages() {
-  DEBIAN_FRONTEND=noninteractive
-  DEBIAN_PRIORITY=critical
-  DEBCONF_DB_OVERRIDE=’File{/root/config.dat}’
-  export DEBIAN_FRONTEND DEBIAN_PRIORITY DEBCONF_DB_OVERRIDE
-
-  #basic stuff
-  chroot .  apt-get --no-install-recommends -q -y --force-yes install rsyslog logrotate cron chkconfig insserv net-tools ifupdown vim-tiny netbase iptables openssh-server grub-legacy e2fsprogs dhcp3-client dnsmasq tcpdump socat wget  python bzip2 sed gawk diffutils grep gzip less tar telnet ftp rsync traceroute psmisc lsof procps monit inetutils-ping iputils-arping httping dnsutils zip unzip ethtool uuid file iproute acpid iptables-persistent virt-what sudo
-  #fix hostname in openssh-server generated keys
+keyname() {
   sed -i "s/root@\(.*\)$/root@systemvm/g" etc/ssh/ssh_host_*.pub
-
-  #sysstat
-  chroot . echo 'sysstat sysstat/enable boolean true' | chroot . debconf-set-selections
-  chroot .  apt-get --no-install-recommends -q -y --force-yes install sysstat
-  #apache
-  chroot .  apt-get --no-install-recommends -q -y --force-yes install apache2 ssl-cert 
-  #haproxy
-  chroot . apt-get --no-install-recommends -q -y --force-yes install haproxy 
-  #dnsmasq
-  chroot . apt-get --no-install-recommends -q -y --force-yes install dnsmasq 
-  #nfs client
-  chroot . apt-get --no-install-recommends -q -y --force-yes install nfs-common
-  #vpn stuff
-  chroot .  apt-get --no-install-recommends -q -y --force-yes install xl2tpd openswan bcrelay ppp ipsec-tools tdb-tools
-  #vmware tools
-  chroot . apt-get --no-install-recommends -q -y --force-yes install open-vm-tools
-  #xenstore utils
-  chroot . apt-get --no-install-recommends -q -y --force-yes install xenstore-utils libxenstore3.0
-  #keepalived and conntrackd
-  chroot . apt-get --no-install-recommends -q -y --force-yes install keepalived conntrackd ipvsadm libnetfilter-conntrack3 libnl1
-  #ipcalc
-  chroot . apt-get --no-install-recommends -q -y --force-yes install ipcalc
-  #irqbalance from wheezy-backports
-  chroot . apt-get --no-install-recommends -q -y --force-yes -t wheezy-backports install irqbalance
-
-  echo "***** getting jre 7 *********"
-  chroot .  apt-get --no-install-recommends -q -y install openjdk-7-jre-headless
 }
 
 
@@ -407,43 +180,24 @@ services() {
   mkdir -p ./root/.ssh
   #Fix haproxy directory issue
   mkdir -p ./var/lib/haproxy
+  mkdir -p ./etc/apache2/conf.d
   
   /bin/cp -r ${scriptdir}/config/* ./
-  chroot . chkconfig xl2tpd off
-  chroot . chkconfig --add cloud-early-config
-  chroot . chkconfig cloud-early-config on
-  chroot . chkconfig --add iptables-persistent
-  chroot . chkconfig iptables-persistent off
-  chroot . chkconfig --force --add cloud-passwd-srvr
-  chroot . chkconfig cloud-passwd-srvr off
-  chroot . chkconfig --add cloud
-  chroot . chkconfig cloud off
-  chroot . chkconfig monit off
-}
-
-dhcp_fix() {
-  #deal with virtio DHCP issue, copy and install customized kernel module and iptables
-  mkdir -p tmp
-  cp /tmp/systemvm/xt_CHECKSUM.ko lib/modules/2.6.32-5-686-bigmem/kernel/net/netfilter
-  chroot . depmod -a 2.6.32-5-686-bigmem
-  cp /tmp/systemvm/iptables_1.4.8-3local1checksum1_i386.deb tmp/
-  chroot . dpkg -i tmp/iptables_1.4.8-3local1checksum1_i386.deb
-  rm tmp/iptables_1.4.8-3local1checksum1_i386.deb
-}
-
-install_xs_tool() {
-  #deal with virtio DHCP issue, copy and install customized kernel module and iptables
-  mkdir -p tmp
-  cp /tmp/systemvm/xe-guest-utilities_5.6.0-595_i386.deb tmp/
-  chroot . dpkg -i tmp/xe-guest-utilities_5.6.0-595_i386.deb
-  rm tmp/xe-guest-utilities_5.6.0-595_i386.deb
+  chroot . systemctl enable cloud-early-config
+  # chroot . systemctl disable xl2tpd
+  # chroot . chkconfig --add cloud-early-config
+  # chroot . chkconfig cloud-early-config on
+  # chroot . chkconfig --add iptables-persistent
+  # chroot . chkconfig iptables-persistent off
+  # chroot . chkconfig --force --add cloud-passwd-srvr
+  # chroot . chkconfig cloud-passwd-srvr off
+  # chroot . chkconfig --add cloud
+  # chroot . chkconfig cloud off
+  # chroot . chkconfig monit off
 }
 
 cleanup() {
-  rm -f usr/sbin/policy-rc.d
-  rm -f root/config.dat
-  rm -f etc/apt/apt.conf.d/01proxy 
-
+  type=$1 
   if [ "$MINIMIZE" == "true" ]
   then
     rm -rf var/cache/apt/*
@@ -451,9 +205,27 @@ cleanup() {
     rm -rf usr/share/locale/[a-d]*
     rm -rf usr/share/locale/[f-z]*
     rm -rf usr/share/doc/*
-    size=$(df   $MOUNTPOINT | awk '{print $4}' | grep -v Available)
-    dd if=/dev/zero of=$MOUNTPOINT/zeros.img bs=1M count=$((((size-150000)) / 1000))
-    rm -f $MOUNTPOINT/zeros.img
+    if [ "$type" != "ISO" ]
+    then
+        size=$(df   $MOUNTPOINT | awk '{print $4}' | grep -v Available)
+        dd if=/dev/zero of=$MOUNTPOINT/zeros.img bs=1M count=$((((size-150000)) / 1000))
+        rm -f $MOUNTPOINT/zeros.img
+    fi
+  fi
+  sudo umount $MOUNTPOINT/dev
+  sudo umount $MOUNTPOINT/proc
+  if [ "$type" != "ISO" ]
+  then
+    sudo umount -l $MOUNTPOINT
+    loop=$(sudo losetup -a| grep $IMAGE | awk -F: '{print $1}')
+    sleep 5
+    set +x
+    set +e
+    cd $scriptdir
+    sudo kpartx -d $loop
+    sudo losetup -d $loop
+  else
+    echo "should place other stuff here"
   fi
 }
 
@@ -465,37 +237,28 @@ signature() {
   echo "Cloudstack Release $CLOUDSTACK_RELEASE $(date)" > ${MOUNTPOINT}/etc/cloudstack-release
 }
 
-#check grub version
+fix_requirements() {
+    apt-get install xorriso live-build syslinux squashfs-tools
+}
 
-grub --version | grep "0.9" > /dev/null
-if [ $? -ne 0 ]
-then
-    echo You need grub 0.9x\(grub-legacy\) to use this script!
-    exit 1
-fi
+fix_requirements
 
 mkdir -p $IMAGENAME
 mkdir -p $LOCATION
-MOUNTPOINT=/mnt/$IMAGENAME/
-IMAGELOC=$LOCATION/$IMAGENAME.img
+MOUNTPOINT=/mnt/$IMAGENAME
+export MNTPOINT=$MOUNTPOINT
 scriptdir=$(dirname $PWD/$0)
 
-rm -rf /tmp/systemvm
-mkdir -p /tmp/systemvm
-#cp ./xt_CHECKSUM.ko /tmp/systemvm
-#cp ./iptables_1.4.8-3local1checksum1_i386.deb /tmp/systemvm
-#cp ./xe-guest-utilities_5.6.0-595_i386.deb /tmp/systemvm
+rm -rf /tmp$IMAGENAME/
+mkdir -p /tmp/$IMAGENAME
 
-rm -f $IMAGELOC
+rm -f $IMAGE
 begin=$(date +%s)
 echo "*************INSTALLING BASEIMAGE********************"
-baseimage
+baseimage "NOISO"
 
 cp $scriptdir/config.dat $MOUNTPOINT/root/
 cd $MOUNTPOINT
-
-mount -o bind /proc $MOUNTPOINT/proc
-mount -o bind /dev $MOUNTPOINT/dev
 
 echo "*************CONFIGURING APT********************"
 fixapt  
@@ -505,34 +268,9 @@ echo "*************CONFIGURING NETWORK********************"
 network
 echo "*************DONE CONFIGURING NETWORK********************"
 
-echo "*************INSTALLING KERNEL********************"
-install_kernel $IMAGELOC
-echo "*************DONE INSTALLING KERNEL********************"
-
-echo "*************CONFIGURING GRUB********************"
-fixgrub $IMAGELOC
-echo "*************DONE CONFIGURING GRUB********************"
-
-
-echo "*************CONFIGURING INITTAB********************"
-fixinittab
-echo "*************DONE CONFIGURING INITTAB********************"
-
-echo "*************CONFIGURING FSTAB********************"
-fixfstab
-echo "*************DONE CONFIGURING FSTAB********************"
-
-echo "*************CONFIGURING ACPID********************"
-fixacpid
-echo "*************DONE CONFIGURING ACPID********************"
-
 echo "*************INSTALLING PACKAGES********************"
-packages
+keyname
 echo "*************DONE INSTALLING PACKAGES********************"
-
-echo "*************CONFIGURING IPTABLES********************"
-fixiptables
-echo "*************DONE CONFIGURING IPTABLES********************"
 
 echo "*************CONFIGURING PASSWORD********************"
 password
@@ -546,24 +284,13 @@ apache2
 echo "*************CONFIGURING VPN********************"
 vpn_config
 
-echo "*************FIX DHCP ISSUE********************"
-#dhcp_fix
-
-echo "*************INSTALL XS TOOLS********************"
-#install_xs_tool
-
-echo "*************CLEANING UP********************"
-cleanup 
-
 echo "*************GENERATING SIGNATURE********************"
 signature
 
-cd $scriptdir
+echo "*************CLEANING UP********************"
+cleanup "NOISO"
 
-umount $MOUNTPOINT/proc
-umount $MOUNTPOINT/dev
-umount $MOUNTPOINT
 fin=$(date +%s)
 t=$((fin-begin))
-echo "Finished building image $IMAGELOC in $t seconds"
+echo "Finished building image $IMAGE in $t seconds"
 

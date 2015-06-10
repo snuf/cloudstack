@@ -27,7 +27,7 @@
 # under the License.
 
 PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin"
-#set -x
+set -x
 #exec 3>&0 4>&1 > /var/log/test.log 2>&1
 #start hv_kvp daemon
 [ -f /usr/sbin/hv_kvp_daemon ] && /usr/sbin/hv_kvp_daemon
@@ -107,28 +107,41 @@ get_boot_params() {
   local EXTRA_MOUNT=/media/extra
   local hyp=$(hypervisor)
   [ $? -ne 0 ] && log_it "Failed to detect hypervisor type, bailing out of early init" && exit 10
-
   case $hyp in
      xen-domU|xen-hvm)
           cat /proc/cmdline > /var/cache/cloud/cmdline
           sed -i "s/%/ /g" /var/cache/cloud/cmdline
           ;;
      kvm)
-          if [ ! -e /dev/vport0p1 ]; then
-            log_it "/dev/vport0p1 not loaded, perhaps guest kernel is too old." && exit 2
+          # vport address changes per host that is on the guest
+          # just count
+          vport=$(ls -1 /dev/vport*)
+          if [ ! -e $vps ]; then
+            log_it "/dev/vport*p1 not loaded, perhaps guest kernel is too old." && exit 2
+          fi
+          if [ -f "/var/cache/cloud/cmdline" ]
+          then
+            log_it "$vport was empty, already have a cmdline"
+            return
+          else
+            log_it "will wait for $vport to give config data"
           fi
           while [ -z "$cmd" ]; do
-            while read line; do
-              if [[ $line == cmdline:* ]]; then
-                cmd=${line//cmdline:/}
-                echo $cmd > /var/cache/cloud/cmdline
-              elif [[ $line == pubkey:* ]]; then
-                pubkey=${line//pubkey:/}
-                echo $pubkey > /var/cache/cloud/authorized_keys
-                echo $pubkey > /root/.ssh/authorized_keys
-              fi
-            done < /dev/vport0p1
-	  done
+            if [ "$data" == ""]; then
+              log_it "Failed to read cmdline data from $vport!!!"
+            else
+              while read line; do
+                if [[ $line == cmdline:* ]]; then
+                  cmd=${line//cmdline:/}
+                  echo $cmd > /var/cache/cloud/cmdline
+                elif [[ $line == pubkey:* ]]; then
+                  pubkey=${line//pubkey:/}
+                  echo $pubkey > /var/cache/cloud/authorized_keys
+                  echo $pubkey > /root/.ssh/authorized_keys
+                fi
+              done < $vport
+            fi
+          done
           chmod go-rwx /root/.ssh/authorized_keys
           ;;
      vmware)
@@ -786,10 +799,29 @@ setup_sshd(){
   sed -i "/3922/s/eth./$eth/" /etc/iptables/rules
 }
 
+service_startup() {
+    service=$1
+    state=$2
+    ver=$(cat /etc/debian_version)
+    if [ "$ver" != "8.0" ]
+    then
+        log_it "Setting $service to $state with chkconfig"
+        chkconfig $service $state
+    else
+        if [ "$state" == "on" ]
+        then
+            state="enable"
+        else
+            state="disable"
+        fi
+        log_it "Setting $service to $state with systemctl"
+        systemctl $state $service
+    fi
+}
 
 setup_vpc_apache2() {
   log_it "Setting up apache web server for VPC"
-  chkconfig apache2 off
+  service_startup apache2 off
   rm -f /etc/apache2/conf.d/vhost*.conf
   [ -f /etc/apache2/sites-available/default ] && echo "" >/etc/apache2/sites-available/default
   [ -f /etc/apache2/sites-available/default-ssl ] && echo "">/etc/apache2/sites-available/default-ssl
@@ -983,7 +1015,7 @@ setup_router() {
   disable_rpfilter_domR
   enable_fwding 1
   enable_rpsrfs 1
-  chkconfig nfs-common off
+  service_startup nfs-common off
   cp /etc/iptables/iptables-router /etc/iptables/rules.v4
 #for old templates
   cp /etc/iptables/iptables-router /etc/iptables/rules
@@ -1119,7 +1151,7 @@ setup_dhcpsrvr() {
   enable_svc cloud-passwd-srvr 1
   enable_svc cloud 0
   enable_fwding 0
-  chkconfig nfs-common off
+  service_startup nfs-common off
 
   cp /etc/iptables/iptables-router /etc/iptables/rules.v4
   cp /etc/iptables/iptables-router /etc/iptables/rules
@@ -1237,7 +1269,7 @@ setup_console_proxy() {
   enable_svc dnsmasq 0
   enable_svc cloud-passwd-srvr 0
   enable_svc cloud 1
-  chkconfig nfs-common off
+  service_startup nfs-common off
   rm /etc/logrotate.d/cloud
 }
 
@@ -1265,8 +1297,8 @@ setup_elbvm() {
   enable_svc dnsmasq 0
   enable_svc cloud-passwd-srvr 0
   enable_svc cloud 0
-  chkconfig nfs-common off
-  chkconfig portmap off
+  service_startup nfs-common off
+  service_startup portmap off
 }
 
 setup_ilbvm() {
@@ -1288,8 +1320,8 @@ setup_ilbvm() {
   enable_svc dnsmasq 0
   enable_svc cloud-passwd-srvr 0
   enable_svc cloud 0
-  chkconfig nfs-common off
-  chkconfig portmap off
+  service_startup nfs-common off
+  service_startup portmap off
 }
 
 setup_default() {
@@ -1315,9 +1347,12 @@ start() {
   [ $? -ne 0 ] && log_it "Failed to detect hypervisor type, bailing out of early init" && exit 10
   log_it "Detected that we are running inside $hyp guest"
   get_boot_params
+  log_it "Going to patch" 
   patch
   patch_log4j
+  log_it "Parsing cmdline"
   parse_cmd_line
+  log_it "Change password"
   change_password
   case $TYPE in 
      router)

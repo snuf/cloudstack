@@ -1,4 +1,4 @@
-#/bin/bash
+#!/bin/bash
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -156,6 +156,7 @@ CMDLINE=$(cat /var/cache/cloud/cmdline)
 TYPE="router"
 PATCH_MOUNT=$1
 Hypervisor=$2
+SYSTEM=`cat /etc/debian_version`
 
 for i in $CMDLINE
   do
@@ -185,8 +186,9 @@ fi
 #empty known hosts
 echo "" > /root/.ssh/known_hosts
 
-if [ "$Hypervisor" == "kvm" ]
+if [ "$Hypervisor" == "kvm" ] && [ "$SYSTEM" != "8.0" ]
 then
+  
    enable_pcihotplug
    enable_serial_console
 fi
