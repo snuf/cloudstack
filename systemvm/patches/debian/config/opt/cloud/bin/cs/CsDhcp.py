@@ -16,6 +16,7 @@
 # under the License.
 import CsHelper
 import logging
+import platform
 from netaddr import *
 from CsGuestNetwork import CsGuestNetwork
 from cs.CsDatabag import CsDataBag
@@ -53,14 +54,19 @@ class CsDhcp(CsDataBag):
             CsHelper.hup_dnsmasq("dnsmasq", "dnsmasq")
 
     def configure_server(self):
+        dist=platform.dist()
         # self.conf.addeq("dhcp-hostsfile=%s" % DHCP_HOSTS)
         for i in self.devinfo:
             if not i['dnsmasq']:
                 continue
             device = i['dev']
             ip = i['ip'].split('/')[0]
-            sline = "dhcp-range=interface:%s,set:interface" % (device)
-            line = "dhcp-range=interface:%s,set:interface-%s,%s,static" % (device, device, ip)
+            if dist[1] >= 8:
+                interface=""
+            else:
+                interface="interface:%s," % (device)
+            sline = "dhcp-range=%sset:interface" % (interface)
+            line = "dhcp-range=%sset:interface-%s,%s,static" % (interface, device, ip)
             self.conf.search(sline, line)
             gn = CsGuestNetwork(device, self.config)
             sline = "dhcp-option=tag:interface-%s,15" % device

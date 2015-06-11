@@ -93,7 +93,7 @@ setup_dnsmasq() {
   #  https://github.com/petterreinholdtsen/freedombox-setup/issues/2
   ver=$(cat /etc/debian_version)
   interface=""
-  if [d "$ver" != "8.0" ]
+  if [ "$ver" != "8.0" ]
   then
     interface="interface:$dev,"
   fi
