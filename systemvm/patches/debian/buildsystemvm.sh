@@ -183,6 +183,7 @@ services() {
   mkdir -p ./etc/apache2/conf.d
   
   /bin/cp -r ${scriptdir}/config/* ./
+  chroot . systemctl enable serial-getty@ttyS0
   chroot . systemctl enable cloud-early-config
   # chroot . systemctl disable xl2tpd
   # chroot . chkconfig --add cloud-early-config
