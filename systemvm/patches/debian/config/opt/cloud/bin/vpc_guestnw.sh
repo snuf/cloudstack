@@ -88,8 +88,18 @@ setup_dnsmasq() {
   sudo iptables -A INPUT -i $dev -d $ip -p udp -m udp --dport 53 -j ACCEPT
   sudo iptables -A INPUT -i $dev -d $ip -p tcp -m tcp --dport 53 -j ACCEPT
   # setup static 
+  # jessie's dnsmasq does not support the interface tag:
+  #  https://github.com/petterreinholdtsen/freedombox-setup/pull/4
+  #  https://github.com/petterreinholdtsen/freedombox-setup/issues/2
+  ver=$(cat /etc/debian_version)
+  interface=""
+  if [d "$ver" != "8.0" ]
+  then
+    interface="interface:$dev,"
+  fi
   sed -i -e "/^[#]*dhcp-range=interface:$dev/d" /etc/dnsmasq.d/cloud.conf
-  echo "dhcp-range=interface:$dev,set:interface-$dev,$ip,static" >> /etc/dnsmasq.d/cloud.conf
+  echo "dhcp-range=${interface}set:interface-$dev,$ip,static" >> /etc/dnsmasq.d/cloud.conf
+
   # setup DOMAIN
   [ -z $DOMAIN ] && DOMAIN="cloudnine.internal"
 
